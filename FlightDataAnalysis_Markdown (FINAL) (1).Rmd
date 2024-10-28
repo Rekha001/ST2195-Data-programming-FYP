@@ -1,0 +1,338 @@
+---
+title: "ST2195"
+author: "SWARNAREKHA"
+date: "2023-03-23"
+output: html_document
+# UOL STUDENT NUMBER: 210501801
+---
+
+```{r}
+df2000 <- read.csv("2000.csv")
+df2001 = read.csv("2001.csv")
+df2001
+```
+
+
+
+
+```{r}
+colSums(is.na(df2000))
+
+```
+```{r}
+colSums(is.na(df2001))
+
+```
+We can see that in both data frames, some columns are completely missing and we need to remove all those columns.
+we will be dropping columns that contain null values. 
+
+```{r}
+df2000 <- df2000[, !(names(df2000) %in% c('CancellationCode', 'CarrierDelay', 'WeatherDelay', 'NASDelay', 'SecurityDelay', 'LateAircraftDelay'))]
+df2001 <- df2001[, !(names(df2001) %in% c('CancellationCode', 'CarrierDelay', 'WeatherDelay', 'NASDelay', 'SecurityDelay', 'LateAircraftDelay'))]
+
+
+```
+
+As part of the cleaning process, nan values will be removed from the data. Alternatively we can also replace it with mean. As the number of nan value are significantly low, the better option is to drop it. 
+
+```{r}
+Dfdf2000Clean <- na.omit(df2000)
+Df2001Clean <- na.omit(df2001)
+cat("The length of 2000 data is !=", nrow(Dfdf2000Clean), "\n")
+cat("The length of 2001 data is !=", nrow(Df2001Clean), "\n")
+
+```
+combining both dataset.
+```{r}
+DfCombine <- rbind(Dfdf2000Clean, Df2001Clean)
+```
+### 1 Best time of day, month, year to fly to avoid or minimize delays
+
+```{r}
+dataArr <- DfCombine[DfCombine$ArrDelay < 1, ]
+dataDep <- DfCombine[DfCombine$DepDelay < 1, ]
+
+```
+
+```{r}
+round_to_nearest_hundred_with_threshold <- function(value, threshold) {
+  # Step 2
+  rounded_value <- round(value / 100)
+
+  # Step 4
+  rounded_value <- rounded_value * 100
+
+  # Step 5
+  if (abs(value - rounded_value) <= threshold) {
+    new_value <- rounded_value
+  } else {
+    new_value <- rounded_value + 100
+  }
+
+  return(new_value)
+}
+
+```
+
+```{r}
+dataArr_copy <- dataArr
+
+dataArr_copy$ArrTime <- sapply(dataArr_copy$ArrTime, function(x) round_to_nearest_hundred_with_threshold(x, 30))
+
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(dataArr_copy, aes(x=ArrTime)) +
+  geom_bar(fill = "red") +
+  ggtitle("Total On-time flight round the clock") +
+  xlab("Time") +
+  ylab("Total Flight") +
+  theme_minimal()
+```
+
+
+This figure shows that morning and noon timings are better to minimize delays
+
+### Best time of year
+
+```{r}
+library(ggplot2)
+
+dataArr <- dataArr[complete.cases(dataArr),]
+
+ggplot(dataArr, aes(x = Month)) +
+  geom_bar(fill = "red", color = "black") +
+  ggtitle("Total On Time monthly Flight (Departed)") +
+  xlab("Month Number") +
+  ylab("Total Number of flights") +
+  scale_x_continuous(limits=c(0.5, 12.5), breaks=seq(1, 12, by=1)) +
+  theme_minimal()
+
+```
+The best month of the year is march, april and May where the flight is less likely to be delayed as compare to other months of the year.
+
+### Best time of the week
+
+```{r}
+dataArr <- dataArr[complete.cases(dataArr),]
+ggplot(dataArr, aes(x=DayOfWeek)) +
+  geom_bar(fill = "red", color = "black", alpha=0.7, stat="count") +
+  ggtitle("Number of Flight Arrived on time in each Week") +
+  xlab("Day of Week") +
+  ylab("Number of flights") +
+  scale_x_continuous(limits=c(0.5, 7.5), breaks=seq(1, 7, by=1)) +
+  theme_minimal()
+
+```
+Above figure shows that the best day of the week is day 1 (Sunday) or 2 (Monday) where mostly flights arrived on time. 
+
+
+Best time of the month
+
+```{r}
+
+ggplot(dataArr, aes(x=DayofMonth)) +
+  geom_bar(fill = "red", color = "black", alpha=0.7, stat="count") +
+  ggtitle("Total Flight arrived on time on each monthly day") +
+  xlab("Day of Month") +
+  ylab("Total Fligths") +
+  scale_x_continuous(limits=c(0.5, 31.5), breaks=seq(1, 31, by=1)) +
+  theme_minimal()
+
+
+```
+Above figure shows that the best day of the month is start and the end of the month. As we can see that the number of flight arrived on time in the middle of the month is less as compare to the start and end of the month.
+
+
+2. Do older planes suffer more delays?
+```{r}
+library(tidyverse)
+
+# Read in plane data
+plane_data <- read.csv("plane-data.csv")
+
+# Remove rows with missing values from plane_data
+plane_data <- na.omit(plane_data)
+```
+```{r}
+# Join df_combine with plane_data on tailnum
+selected_cols <- c("tailnum", "type", "manufacturer", "issue_date", "model", "status", "aircraft_type", "engine_type", "year")
+plane_data_select <- plane_data[, selected_cols]
+library(dplyr)
+
+# Rename tailnum in plane_data to match TailNum in DfCombine
+plane_data_select <- plane_data_select %>% rename(TailNum = tailnum)
+
+# Left join DfCombine and plane_data_select by TailNum
+combined_data <- left_join(DfCombine, plane_data_select, by = "TailNum")
+memory.limit(8000)
+```
+
+```{r}
+# Calculate delay time for each flight
+combined_data <- combined_data %>%
+  mutate(DepDelay = DepTime - CRSDepTime,
+         ArrDelay = ArrTime - CRSArrTime)
+```
+
+```{r}
+# Determine average delay time by aircraft type
+combined_data %>%
+  group_by(year) %>%
+  summarise(avg_delay = mean(ArrDelay, na.rm = TRUE))
+```
+
+```{r}
+# Determine average delay time by aircraft type
+combined_data %>%
+  group_by(year) %>%
+  summarise(avg_delay = mean(ArrDelay, na.rm = TRUE))
+```
+
+```{r}
+library(ggplot2)
+
+# Filter out rows with missing values in mfg_year and avg_delay
+combined_data <- combined_data %>% 
+  filter(!is.na(year) & !is.na(ArrDelay))
+```
+
+
+```{r}
+# Calculate the age of the plane by subtracting the year of manufacture from the current year (2023)
+combined_data$age <- 2023 - combined_data$year
+# Group the data by age and calculate the average delay time
+delay_by_age <- combined_data %>%
+  group_by(year) %>%
+  summarise(avg_delay = mean(ArrDelay, na.rm = TRUE))
+```
+
+```{r}
+# Create a new column to indicate whether a flight is delayed or not
+combined_data$is_delayed <- ifelse(DfCombine_plot$avg_delay > 0, 1, 0)
+# Group the data by year and calculate the proportion of delayed flights
+delay_prop_by_year <- combined_data %>%
+  group_by(year) %>%
+  summarise(delay_prop = mean(is_delayed))
+# Remove rows with missing values
+delay_prop_by_year <- na.omit(delay_prop_by_year)
+```
+
+```{r}
+# Remove rows for years 2002, 2007 and NA
+delay_prop_by_year <- subset(delay_prop_by_year, year != 2002 & year != 2007 & !is.na(year))
+```
+
+
+
+```{r}
+library(ggplot2)
+# Create a line plot with x-axis interval of 5 years
+ggplot(data = delay_prop_by_year, aes(x = as.numeric(year), y = delay_prop)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(1955, 2003, by = 4)) +
+  labs(x = "Year", y = "Proportion of Delayed Flights",
+        title = "Proportion of Delayed Flights by Manufacturing Year")
+```
+
+
+## 3. How does the number of people flying between different locations change over time?
+```{r}
+head(names(sort(table(Dfdf2000Clean$Origin), decreasing = TRUE)), 15)
+
+```
+
+```{r}
+head(names(sort(table(Df2001Clean$Origin), decreasing = TRUE)), 15)
+
+
+```
+Above are the top 10 most repeated origin in ascending order for 2000 and 2001. It is clear from the above results, that ORD is the most repeated origin in both 2000 and 2001. But at spot 2 in 2000, we have "ATL" as the most repeated while in 2001, it is been taken over by "DFW". It illustrates that in 2001, "DFW" become most popular than "ATL". Such changes can be seen in later airport as well. 
+
+
+
+```{r}
+head(names(sort(table(Dfdf2000Clean$Dest), decreasing = TRUE)), 15)
+
+```
+```{r}
+head(names(sort(table(Df2001Clean$Dest), decreasing = TRUE)), 15)
+
+```
+Above results are the most repeated destination for both year. In tha similar way as origin, the 'DFW" has taken over "ATL" as most popular destination as well.
+
+
+## 4. Can you detect cascading failures as delays in one airport create delays in others?
+
+For this project, we will chose year 2000 and the relationship between departure delay (first airport) will be checked with the relationship with arrival delay (second airport).
+
+```{r}
+library(ggplot2)
+
+ggplot(Dfdf2000Clean, aes(x = DepDelay, y = ArrDelay)) +
+  geom_point() +
+  labs(title = "Relationship between Departure Delay and Arrival Delay",
+       x = "Departure Delay",
+       y = "Arrival Delay") +
+  theme_bw()
+
+```
+This clearly shows that the there is a positive direct relationship between departure delay and arrival delay. It also illustrates that delay at one airport due to multiple reason could cause delay in another aiport as well. 
+
+
+
+
+5. Use the available variables to construct a model that predicts delays
+
+```{r}
+modelData <- df2000[c('TaxiOut', 'DepDelay', 'CRSArrTime', 'DepTime', 'CRSDepTime', 'ArrDelay')]
+library(ggplot2)
+library(ggcorrplot)
+
+# Create a correlation matrix of the numeric columns of the dataframe
+cor_matrix <- cor(modelData[, sapply(modelData, is.numeric)])
+
+# Plot the correlation matrix using ggcorrplot
+ggcorrplot(cor_matrix, type = "full", lab = TRUE)
+
+```
+
+```{r}
+# extract predictive variables
+X <- Dfdf2000Clean[, c('TaxiOut','DepDelay','CRSArrTime','DepTime','CRSDepTime')]
+
+# extract prediction variable
+y <- Dfdf2000Clean$ArrDelay
+
+# split data set into training and testing sets
+set.seed(0)
+train_index <- caret::createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_index, ]
+X_test <- X[-train_index, ]
+y_train <- y[train_index]
+y_test <- y[-train_index]
+
+# fit linear regression model
+model <- lm(y_train ~ ., data = cbind(X_train, y_train))
+
+# make predictions on test set
+ypred <- predict(model, newdata = X_test)
+
+
+```
+
+```{r}
+# Calculate mean squared error
+mse <- mean((y_test - ypred)^2)
+
+# Calculate R-squared
+r2 <- cor(y_test, ypred)^2
+
+print(paste0("Mean Squared Error: ", mse))
+print(paste0("R-squared: ", r2))
+
+```
+
+
