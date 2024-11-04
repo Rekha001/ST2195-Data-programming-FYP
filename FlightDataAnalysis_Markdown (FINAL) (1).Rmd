@@ -3,7 +3,6 @@ title: "ST2195"
 author: "SWARNAREKHA"
 date: "2023-03-23"
 output: html_document
-# UOL STUDENT NUMBER: 210501801
 ---
 
 ```{r}
